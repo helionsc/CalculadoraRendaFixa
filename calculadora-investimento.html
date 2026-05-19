@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0a0a14" />
+  <title>Simulador de Renda Fixa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --bg: #0a0a14; --bg2: #12121f; --bg3: #1a1a2e;
+      --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+      --text: #f0f0f8; --text2: #8888aa; --text3: #555570;
+      --blue: #4f8ef7; --blue2: #7eb3ff; --green: #4fc98e; --amber: #f7a84f; --red: #f07a7a;
+      --radius: 16px; --radius-sm: 10px;
+    }
+    html, body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+    body { min-height: 100dvh; padding: env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0); }
+
+    /* ── SETUP SCREEN ── */
+    #setupScreen {
+      position: fixed; inset: 0; z-index: 999;
+      background: var(--bg);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 32px 24px; overflow-y: auto;
+    }
+    #setupScreen.hidden { display: none; }
+    .setup-logo {
+      width: 60px; height: 60px; border-radius: 18px;
+      background: linear-gradient(135deg,#1e3a6e,#0a1a3a);
+      border: 0.5px solid var(--blue);
+      display: flex; align-items: center; justify-content: center; margin-bottom: 24px; flex-shrink: 0;
+    }
+    .setup-logo svg { width: 30px; height: 30px; }
+    .setup-title { font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 8px; letter-spacing: -0.3px; }
+    .setup-sub { font-size: 13px; color: var(--text2); text-align: center; line-height: 1.65; margin-bottom: 32px; max-width: 310px; }
+    .setup-box { width: 100%; max-width: 380px; }
+    .setup-label { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; display: block; }
+    .setup-input {
+      width: 100%; padding: 16px 14px; font-size: 13px; font-family: 'DM Mono', monospace;
+      background: var(--bg3); border: 0.5px solid var(--border2);
+      border-radius: var(--radius-sm); color: var(--text); outline: none;
+      transition: border-color 0.2s; -webkit-appearance: none; letter-spacing: 0.5px;
+    }
+    .setup-input:focus { border-color: var(--blue); }
+    .setup-input::placeholder { color: var(--text3); letter-spacing: 0; font-size: 12px; }
+    .setup-hint { font-size: 11px; color: var(--text3); margin-top: 10px; line-height: 1.7; }
+    .setup-hint a { color: var(--blue2); text-decoration: none; }
+    .setup-steps {
+      background: var(--bg3); border: 0.5px solid var(--border); border-radius: var(--radius-sm);
+      padding: 14px; margin-top: 14px;
+    }
+    .setup-steps-title { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+    .step-item { display: flex; gap: 10px; margin-bottom: 8px; }
+    .step-item:last-child { margin-bottom: 0; }
+    .step-num { width: 20px; height: 20px; border-radius: 50%; background: rgba(79,142,247,0.15); border: 0.5px solid rgba(79,142,247,0.3); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--blue2); flex-shrink: 0; margin-top: 1px; }
+    .step-text { font-size: 12px; color: var(--text2); line-height: 1.5; }
+    .step-text a { color: var(--blue2); text-decoration: none; }
+    .setup-btn {
+      width: 100%; padding: 17px; margin-top: 16px;
+      background: var(--blue); border: none; border-radius: var(--radius-sm);
+      color: #fff; font-family: 'Syne', sans-serif;
+      font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.2s; -webkit-appearance: none;
+    }
+    .setup-btn:active { transform: scale(0.97); background: #3a7aee; }
+    .setup-btn.loading { opacity: 0.6; pointer-events: none; }
+    .setup-err { font-size: 12px; color: var(--red); margin-top: 10px; text-align: center; background: rgba(240,122,122,0.1); border-radius: 8px; padding: 8px 12px; display: none; }
+    .setup-err.show { display: block; }
+    .setup-skip { font-size: 12px; color: var(--text3); text-align: center; margin-top: 16px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(10,10,20,0.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 0.5px solid var(--border); padding: 14px 20px 12px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .topbar-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg,#1e3a6e,#0a1a3a); border: 0.5px solid var(--blue);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .topbar-icon svg { width: 17px; height: 17px; }
+    .topbar-titles { flex: 1; }
+    .topbar h1 { font-size: 15px; font-weight: 800; letter-spacing: -0.3px; }
+    .topbar p { font-size: 11px; color: var(--text2); margin-top: 1px; }
+    .key-pill {
+      display: flex; align-items: center; gap: 5px; padding: 5px 10px;
+      background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 20px;
+      cursor: pointer; flex-shrink: 0; transition: border-color 0.2s;
+    }
+    .key-pill:hover { border-color: var(--blue); }
+    .key-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .key-dot.on  { background: var(--green); }
+    .key-dot.off { background: var(--red); }
+    .key-pill span { font-size: 10px; font-weight: 700; color: var(--text2); letter-spacing: 0.5px; }
+
+    /* ── LAYOUT ── */
+    .scroll-body { padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 14px; }
+    .card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 18px 16px; }
+    .card-label { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: var(--text3); margin-bottom: 14px; }
+
+    /* ── FIELDS ── */
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label { display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.8px; }
+    .input-wrap { position: relative; display: flex; align-items: center; }
+    .input-prefix { position: absolute; left: 14px; font-size: 14px; font-weight: 600; color: var(--text2); font-family: 'DM Mono', monospace; pointer-events: none; z-index: 1; }
+    .input-wrap input {
+      width: 100%; padding: 14px 14px 14px 42px; font-size: 22px; font-weight: 700; font-family: 'DM Mono', monospace;
+      background: var(--bg3); border: 0.5px solid var(--border2); border-radius: var(--radius-sm);
+      color: var(--text); outline: none; transition: border-color 0.2s; -webkit-appearance: none;
+    }
+    .input-wrap input:focus { border-color: var(--blue); }
+    .input-wrap input::placeholder { color: var(--text3); }
+
+    /* ── TIPO ── */
+    .tipo-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .tipo-btn { padding: 12px 4px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg3); cursor: pointer; text-align: center; transition: all 0.18s; color: var(--text2); position: relative; }
+    .tipo-btn .tnome { font-size: 15px; font-weight: 800; display: block; font-family: 'Syne',sans-serif; }
+    .tipo-btn .tdesc { font-size: 10px; letter-spacing: 0.5px; margin-top: 2px; display: block; color: var(--text3); font-family: 'Syne',sans-serif; }
+    .tipo-btn.ativo { border-color: var(--blue); background: rgba(79,142,247,0.12); color: var(--blue2); }
+    .tipo-btn.ativo .tnome { color: #fff; }
+    .tipo-btn.ativo .tdesc { color: var(--blue2); }
+    .tipo-btn.ativo::after { content:''; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%); width:24px; height:2px; border-radius:2px; background:var(--blue); }
+
+    /* ── TAXA ── */
+    .taxa-box { margin-top: 12px; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: var(--radius-sm); padding: 12px 14px; min-height: 60px; display: flex; align-items: center; gap: 10px; }
+    .taxa-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .taxa-info { flex: 1; }
+    .taxa-val { font-family: 'DM Mono',monospace; font-size: 18px; font-weight: 700; color: var(--blue); }
+    .taxa-desc { font-size: 11px; color: var(--text2); margin-top: 2px; }
+    .taxa-fonte { font-size: 10px; color: var(--text3); margin-top: 2px; }
+    .ir-badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; letter-spacing: 0.5px; flex-shrink: 0; }
+    .ir-isento { background: rgba(79,201,142,0.18); color: var(--green); }
+    .ir-incide { background: rgba(240,122,122,0.18); color: var(--red); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { display: inline-block; animation: spin 0.9s linear infinite; }
+    .loading-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+
+    /* ── PERÍODO ── */
+    .periodo-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+    .ptab { padding: 8px 18px; border: 0.5px solid var(--border2); border-radius: 50px; background: transparent; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text2); transition: all 0.15s; font-family: 'Syne',sans-serif; }
+    .ptab.ativo { background: rgba(79,142,247,0.15); border-color: var(--blue); color: var(--blue2); }
+    .periodo-display { text-align: center; padding: 10px 0; font-family: 'DM Mono',monospace; font-size: 36px; font-weight: 700; line-height: 1; }
+    .periodo-display span { font-size: 16px; font-weight: 400; color: var(--text2); margin-left: 6px; }
+    input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px; background: var(--border2); outline: none; cursor: pointer; margin: 12px 0; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--blue); border: 3px solid var(--bg); box-shadow: 0 0 0 1px var(--blue); cursor: pointer; }
+    input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--blue); border: 3px solid var(--bg); cursor: pointer; }
+
+    /* ── BOTÃO ── */
+    .btn-calcular { width: 100%; padding: 18px; background: var(--blue); border: none; border-radius: var(--radius-sm); color: #fff; font-family: 'Syne',sans-serif; font-size: 16px; font-weight: 800; cursor: pointer; margin-top: 4px; transition: all 0.2s; -webkit-appearance: none; }
+    .btn-calcular:active { transform: scale(0.97); background: #3a7aee; }
+
+    /* ── RESULTADO ── */
+    #resultado { display: none; }
+    #resultado.visivel { display: block; animation: fadeUp 0.4s ease; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+    .breakdown { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .bk-row { display: flex; align-items: center; justify-content: space-between; padding: 14px; background: var(--bg3); border-radius: var(--radius-sm); border-left: 3px solid transparent; gap: 10px; }
+    .bk-row.blue  { border-color: var(--blue); }
+    .bk-row.green { border-color: var(--green); }
+    .bk-row.amber { border-color: var(--amber); }
+    .bk-row.red   { border-color: var(--red); }
+    .bk-left { display: flex; align-items: center; gap: 10px; }
+    .bk-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 15px; }
+    .bk-icon.blue  { background: rgba(79,142,247,0.15); }
+    .bk-icon.green { background: rgba(79,201,142,0.15); }
+    .bk-icon.amber { background: rgba(247,168,79,0.15); }
+    .bk-icon.red   { background: rgba(240,122,122,0.15); }
+    .bk-label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.7px; }
+    .bk-sub   { font-size: 10px; color: var(--text3); margin-top: 2px; }
+    .bk-val { font-family: 'DM Mono',monospace; font-size: 15px; font-weight: 700; text-align: right; flex-shrink: 0; }
+    .bk-val.blue  { color: var(--blue2); }
+    .bk-val.green { color: var(--green); }
+    .bk-val.amber { color: var(--amber); }
+    .bk-val.red   { color: var(--red); }
+
+    .total-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px; background: rgba(79,142,247,0.1); border: 0.5px solid rgba(79,142,247,0.35); border-radius: var(--radius-sm); margin-bottom: 14px; }
+    .total-row .tlabel { font-size: 13px; font-weight: 700; color: var(--text2); }
+    .total-row .tval   { font-family: 'DM Mono',monospace; font-size: 20px; font-weight: 800; color: #fff; }
+
+    .ir-info { background: rgba(240,122,122,0.07); border: 0.5px solid rgba(240,122,122,0.25); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px; font-size: 11px; color: var(--text2); line-height: 1.6; }
+    .ir-info strong { color: var(--red); }
+    .ir-isento-info { background: rgba(79,201,142,0.07); border: 0.5px solid rgba(79,201,142,0.25); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px; font-size: 11px; color: var(--text2); line-height: 1.6; }
+    .ir-isento-info strong { color: var(--green); }
+
+    .legend-row { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); font-weight: 600; }
+    .legend-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .chart-wrap { position: relative; width: 100%; height: 220px; }
+
+    .sec-divider { height: 0.5px; background: var(--border); margin: 14px 0; }
+    .sec-title { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px; }
+
+    .erro { display: none; font-size: 11px; color: var(--red); background: rgba(240,119,122,0.12); border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
+    .erro.visivel { display: block; }
+    .footer { text-align: center; font-size: 11px; color: var(--text3); padding: 8px 0 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- ══ TELA DE CONFIGURAÇÃO DA CHAVE API ══ -->
+  <div id="setupScreen">
+    <div class="setup-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#4f8ef7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+        <polyline points="16 7 22 7 22 13"></polyline>
+      </svg>
+    </div>
+    <div class="setup-title">Simulador de Renda Fixa</div>
+    <div class="setup-sub">Para consultar taxas em tempo real via IA, informe sua chave da API Anthropic. Ela fica salva só neste dispositivo.</div>
+
+    <div class="setup-box">
+      <label class="setup-label" for="apiKeyInput">Chave da API Anthropic</label>
+      <input class="setup-input" id="apiKeyInput" type="password" placeholder="sk-ant-api03-..." autocomplete="off" />
+
+      <div class="setup-steps">
+        <div class="setup-steps-title">Como obter gratuitamente</div>
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-text">Acesse <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> e crie uma conta</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-text">Vá em <strong style="color:var(--text);">API Keys</strong> → clique em <strong style="color:var(--text);">Create Key</strong></div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-text">Copie a chave gerada e cole aqui acima</div>
+        </div>
+      </div>
+
+      <div class="setup-err" id="setupErr">Chave inválida ou erro de conexão. Verifique e tente novamente.</div>
+      <button class="setup-btn" id="setupBtn" onclick="confirmarChave()">Entrar com a chave →</button>
+      <div class="setup-skip" onclick="pularSemChave()">Continuar sem IA (taxas estimadas)</div>
+    </div>
+  </div>
+
+  <!-- ══ APP PRINCIPAL ══ -->
+  <div id="appContent" style="display:none;">
+
+    <div class="topbar">
+      <div class="topbar-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f8ef7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+          <polyline points="16 7 22 7 22 13"></polyline>
+        </svg>
+      </div>
+      <div class="topbar-titles">
+        <h1>Simulador de Renda Fixa</h1>
+        <p>LCA · LCI · CDB — taxas via IA</p>
+      </div>
+      <div class="key-pill" onclick="trocarChave()" title="Trocar chave API">
+        <div class="key-dot" id="keyDot"></div>
+        <span id="keyLabel">API</span>
+      </div>
+    </div>
+
+    <div class="scroll-body">
+
+      <!-- Valores -->
+      <div class="card">
+        <p class="card-label">Valores</p>
+        <div class="field">
+          <label>Valor inicial</label>
+          <div class="input-wrap">
+            <span class="input-prefix">R$</span>
+            <input type="text" id="valorInicial" inputmode="numeric" placeholder="0,00" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Aporte mensal</label>
+          <div class="input-wrap">
+            <span class="input-prefix">R$</span>
+            <input type="text" id="aporteMensal" inputmode="numeric" placeholder="0,00" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Tipo -->
+      <div class="card">
+        <p class="card-label">Tipo de investimento</p>
+        <div class="tipo-grid">
+          <button class="tipo-btn ativo" data-tipo="CDB" onclick="selecionarTipo(this)">
+            <span class="tnome">CDB</span>
+            <span class="tdesc">Banco</span>
+          </button>
+          <button class="tipo-btn" data-tipo="LCI" onclick="selecionarTipo(this)">
+            <span class="tnome">LCI</span>
+            <span class="tdesc">Imobiliário</span>
+          </button>
+          <button class="tipo-btn" data-tipo="LCA" onclick="selecionarTipo(this)">
+            <span class="tnome">LCA</span>
+            <span class="tdesc">Agronegócio</span>
+          </button>
+        </div>
+        <div class="taxa-box" id="taxaBox">
+          <div class="loading-row"><span class="spin">⟳</span><span>Buscando taxa atual...</span></div>
+        </div>
+        <div class="erro" id="erroTaxa">Não foi possível buscar via IA. Usando estimativa.</div>
+      </div>
+
+      <!-- Período -->
+      <div class="card">
+        <p class="card-label">Período</p>
+        <div class="periodo-tabs">
+          <button class="ptab ativo" data-u="meses" onclick="setUnidade(this)">Meses</button>
+          <button class="ptab" data-u="anos" onclick="setUnidade(this)">Anos</button>
+        </div>
+        <div class="periodo-display" id="periodoDisplay">12 <span>meses</span></div>
+        <input type="range" id="periodoSlider" min="1" max="60" value="12" step="1" oninput="updatePeriodo(this.value)" />
+        <button class="btn-calcular" onclick="calcular()">Calcular rentabilidade →</button>
+      </div>
+
+      <!-- Resultado -->
+      <div class="card" id="resultado">
+        <p class="card-label">Resultado detalhado</p>
+
+        <div class="total-row">
+          <div class="tlabel">💰 Saldo líquido final</div>
+          <div class="tval" id="resTotalLiq">—</div>
+        </div>
+
+        <div class="sec-title">Composição</div>
+        <div class="breakdown" id="breakdown"></div>
+        <div id="irInfoBox"></div>
+
+        <div class="sec-divider"></div>
+
+        <div class="sec-title">Evolução ao longo do tempo</div>
+        <div class="legend-row" id="legendRow"></div>
+        <div class="chart-wrap">
+          <canvas id="grafico" role="img" aria-label="Gráfico de evolução do investimento"></canvas>
+        </div>
+      </div>
+
+      <div class="footer">Simulação estimada · IR pela tabela regressiva · Não constitui recomendação de investimento</div>
+    </div>
+  </div>
+
+  <script>
+    // ── Estado global ──
+    let tipoAtual = 'CDB';
+    let unidadeAtual = 'meses';
+    let periodoAtual = 12;
+    let taxaAtual = null;
+    let grafChart = null;
+    let apiKey = '';
+    let usaIA = false;
+
+    // ── Inicialização ──
+    (function init() {
+      const saved = localStorage.getItem('anthr_key');
+      if (saved) {
+        apiKey = saved; usaIA = true;
+        mostrarApp();
+      }
+    })();
+
+    function mostrarApp() {
+      document.getElementById('setupScreen').classList.add('hidden');
+      document.getElementById('appContent').style.display = 'block';
+      atualizarIndicador();
+      buscarTaxa();
+      document.getElementById('valorInicial').addEventListener('input', function() { mascaraMoeda(this); });
+      document.getElementById('aporteMensal').addEventListener('input', function() { mascaraMoeda(this); });
+    }
+
+    function atualizarIndicador() {
+      const dot = document.getElementById('keyDot');
+      const lbl = document.getElementById('keyLabel');
+      if (usaIA) { dot.className = 'key-dot on'; lbl.textContent = 'IA ON'; }
+      else       { dot.className = 'key-dot off'; lbl.textContent = 'SEM IA'; }
+    }
+
+    async function confirmarChave() {
+      const input = document.getElementById('apiKeyInput');
+      const key = input.value.trim();
+      const err = document.getElementById('setupErr');
+      const btn = document.getElementById('setupBtn');
+      err.classList.remove('show');
+
+      if (!key.startsWith('sk-ant')) {
+        err.textContent = 'A chave deve começar com "sk-ant". Verifique e tente novamente.';
+        err.classList.add('show'); return;
+      }
+
+      btn.classList.add('loading'); btn.textContent = 'Verificando...';
+
+      // Testa a chave com uma chamada mínima
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'ok' }]
+          })
+        });
+        if (!res.ok) throw new Error('auth');
+        localStorage.setItem('anthr_key', key);
+        apiKey = key; usaIA = true;
+        mostrarApp();
+      } catch(e) {
+        err.textContent = 'Chave inválida ou sem conexão. Verifique e tente novamente.';
+        err.classList.add('show');
+        btn.classList.remove('loading'); btn.textContent = 'Entrar com a chave →';
+      }
+    }
+
+    function pularSemChave() {
+      apiKey = ''; usaIA = false;
+      mostrarApp();
+    }
+
+    function trocarChave() {
+      localStorage.removeItem('anthr_key');
+      apiKey = ''; usaIA = false;
+      document.getElementById('setupScreen').classList.remove('hidden');
+      document.getElementById('appContent').style.display = 'none';
+      document.getElementById('apiKeyInput').value = '';
+      document.getElementById('setupErr').classList.remove('show');
+      document.getElementById('setupBtn').classList.remove('loading');
+      document.getElementById('setupBtn').textContent = 'Entrar com a chave →';
+    }
+
+    // ── Máscara ──
+    function mascaraMoeda(input) {
+      let v = input.value.replace(/\D/g, '');
+      if (!v) { input.value = ''; return; }
+      v = (parseInt(v, 10) / 100).toFixed(2);
+      input.value = parseFloat(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function parseMoeda(s) { return parseFloat((s || '').replace(/\./g, '').replace(',', '.')) || 0; }
+    function fmt(v) { return 'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+    // ── Tipo ──
+    function selecionarTipo(btn) {
+      document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('ativo'));
+      btn.classList.add('ativo');
+      tipoAtual = btn.dataset.tipo;
+      taxaAtual = null;
+      buscarTaxa();
+    }
+
+    // ── Período ──
+    function setUnidade(btn) {
+      document.querySelectorAll('.ptab').forEach(b => b.classList.remove('ativo'));
+      btn.classList.add('ativo');
+      unidadeAtual = btn.dataset.u;
+      const sl = document.getElementById('periodoSlider');
+      if (unidadeAtual === 'anos') { sl.max = 30; sl.min = 1; sl.value = 5; periodoAtual = 5; }
+      else                         { sl.max = 60; sl.min = 1; sl.value = 12; periodoAtual = 12; }
+      updatePeriodo(sl.value);
+    }
+    function updatePeriodo(v) {
+      periodoAtual = parseInt(v, 10);
+      const u = unidadeAtual === 'meses' ? 'meses' : 'anos';
+      document.getElementById('periodoDisplay').innerHTML = `${periodoAtual} <span>${u}</span>`;
+    }
+
+    // ── Busca taxa ──
+    async function buscarTaxa() {
+      const box = document.getElementById('taxaBox');
+      const erro = document.getElementById('erroTaxa');
+      erro.classList.remove('visivel');
+
+      const fallback = { CDB: 12.5, LCI: 10.5, LCA: 10.2 };
+      const isento = tipoAtual === 'LCI' || tipoAtual === 'LCA';
+      const cor = tipoAtual === 'CDB' ? '#4f8ef7' : tipoAtual === 'LCI' ? '#4fc98e' : '#f7a84f';
+      const irBadgeOk = isento ? `<span class="ir-badge ir-isento">IR Isento</span>` : `<span class="ir-badge ir-incide">IR Incide</span>`;
+
+      if (!usaIA) {
+        taxaAtual = fallback[tipoAtual];
+        box.innerHTML = `
+          <div class="taxa-dot" style="background:#888;"></div>
+          <div class="taxa-info">
+            <div class="taxa-val">${taxaAtual.toFixed(2)}% a.a.</div>
+            <div class="taxa-desc">Taxa estimada (sem IA)</div>
+          </div>${irBadgeOk}`;
+        return;
+      }
+
+      box.innerHTML = `<div class="loading-row"><span class="spin">⟳</span><span>Consultando taxa do ${tipoAtual} via IA...</span></div>`;
+
+      const prompt = `Você é especialista em renda fixa brasileira. Informe a taxa anual média atual aproximada de ${tipoAtual} no Brasil em ${new Date().toLocaleDateString('pt-BR')}. Responda APENAS com JSON sem markdown: {"taxa_anual_percent": 12.5, "indexador": "CDI", "descricao": "frase curta", "fonte": "Banco Central / ANBIMA"}`;
+
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 300,
+            messages: [{ role: 'user', content: prompt }]
+          })
+        });
+        const data = await res.json();
+        const txt = (data.content || []).map(c => c.text || '').join('');
+        const json = JSON.parse(txt.replace(/```json|```/g, '').trim());
+        taxaAtual = json.taxa_anual_percent;
+        box.innerHTML = `
+          <div class="taxa-dot" style="background:${cor};"></div>
+          <div class="taxa-info">
+            <div class="taxa-val">${taxaAtual.toFixed(2)}% a.a.</div>
+            <div class="taxa-desc">${json.indexador} · ${json.descricao}</div>
+            <div class="taxa-fonte">Fonte: ${json.fonte}</div>
+          </div>${irBadgeOk}`;
+      } catch(e) {
+        taxaAtual = fallback[tipoAtual];
+        box.innerHTML = `
+          <div class="taxa-dot" style="background:#888;"></div>
+          <div class="taxa-info">
+            <div class="taxa-val">${taxaAtual.toFixed(2)}% a.a.</div>
+            <div class="taxa-desc">Taxa estimada (${tipoAtual})</div>
+          </div>${irBadgeOk}`;
+        erro.classList.add('visivel');
+      }
+    }
+
+    // ── Tabela regressiva IR ──
+    function aliquotaIR(dias) {
+      if (dias <= 180) return 0.225;
+      if (dias <= 360) return 0.20;
+      if (dias <= 720) return 0.175;
+      return 0.15;
+    }
+
+    // ── Calcular ──
+    function calcular() {
+      const vi = parseMoeda(document.getElementById('valorInicial').value);
+      const am = parseMoeda(document.getElementById('aporteMensal').value);
+      if (vi <= 0 && am <= 0) { alert('Informe ao menos um valor.'); return; }
+      if (!taxaAtual) { alert('Aguarde a taxa carregar.'); return; }
+
+      const meses = unidadeAtual === 'meses' ? periodoAtual : periodoAtual * 12;
+      const diasTotais = meses * 30;
+      const taxaMensal = Math.pow(1 + taxaAtual / 100, 1 / 12) - 1;
+      const isento = tipoAtual === 'LCI' || tipoAtual === 'LCA';
+
+      const labels = [], invArr = [], rendLiqArr = [], irArr = [];
+      let saldo = vi, totalInvestido = vi;
+      const step = Math.max(1, Math.floor(meses / 12));
+
+      for (let m = 1; m <= meses; m++) {
+        saldo = saldo * (1 + taxaMensal) + am;
+        totalInvestido += am;
+        const rendBruto = saldo - totalInvestido;
+        const dias = m * 30;
+        const aliq = isento ? 0 : aliquotaIR(dias);
+        const ir = rendBruto * aliq;
+        const rendLiq = rendBruto - ir;
+        if (m === 1 || m % step === 0 || m === meses) {
+          labels.push(unidadeAtual === 'anos' && m % 12 === 0 ? `Ano ${m/12}` : `M${m}`);
+          invArr.push(Math.round(totalInvestido));
+          rendLiqArr.push(Math.round(rendLiq));
+          irArr.push(Math.round(ir));
+        }
+      }
+
+      const rendBrutoFinal = saldo - totalInvestido;
+      const aliqFinal = isento ? 0 : aliquotaIR(diasTotais);
+      const irFinal = rendBrutoFinal * aliqFinal;
+      const rendLiqFinal = rendBrutoFinal - irFinal;
+      const saldoLiqFinal = totalInvestido + rendLiqFinal;
+      const rentPctLiq = (rendLiqFinal / totalInvestido) * 100;
+
+      document.getElementById('resTotalLiq').textContent = fmt(saldoLiqFinal);
+
+      document.getElementById('breakdown').innerHTML = `
+        <div class="bk-row blue">
+          <div class="bk-left">
+            <div class="bk-icon blue">💵</div>
+            <div>
+              <div class="bk-label">Total aportado</div>
+              <div class="bk-sub">Valor inicial + aportes mensais</div>
+            </div>
+          </div>
+          <div class="bk-val blue">${fmt(totalInvestido)}</div>
+        </div>
+        <div class="bk-row green">
+          <div class="bk-left">
+            <div class="bk-icon green">📈</div>
+            <div>
+              <div class="bk-label">Rendimento bruto</div>
+              <div class="bk-sub">${taxaAtual.toFixed(2)}% a.a. · antes do IR</div>
+            </div>
+          </div>
+          <div class="bk-val green">+ ${fmt(rendBrutoFinal)}</div>
+        </div>
+        ${!isento ? `
+        <div class="bk-row red">
+          <div class="bk-left">
+            <div class="bk-icon red">🏛️</div>
+            <div>
+              <div class="bk-label">Imposto de renda</div>
+              <div class="bk-sub">Alíquota ${(aliqFinal*100).toFixed(1)}% · ${diasTotais} dias · retido na fonte</div>
+            </div>
+          </div>
+          <div class="bk-val red">− ${fmt(irFinal)}</div>
+        </div>` : ''}
+        <div class="bk-row ${isento ? 'green' : 'amber'}">
+          <div class="bk-left">
+            <div class="bk-icon ${isento ? 'green' : 'amber'}">✨</div>
+            <div>
+              <div class="bk-label">Rendimento líquido</div>
+              <div class="bk-sub">${isento ? 'Isento de IR · ' : ''}+${rentPctLiq.toFixed(2)}% sobre o investido</div>
+            </div>
+          </div>
+          <div class="bk-val ${isento ? 'green' : 'amber'}">+ ${fmt(rendLiqFinal)}</div>
+        </div>`;
+
+      const irBox = document.getElementById('irInfoBox');
+      if (isento) {
+        irBox.innerHTML = `<div class="ir-isento-info"><strong>✅ ${tipoAtual} é isento de IR para pessoa física.</strong><br>Todo o rendimento bruto fica com você. A isenção costuma compensar a taxa menor em relação ao CDB.</div>`;
+      } else {
+        const faixas = [
+          { prazo: 'Até 180 dias',       aliq: '22,5%', check: diasTotais <= 180 },
+          { prazo: '181 a 360 dias',     aliq: '20,0%', check: diasTotais > 180 && diasTotais <= 360 },
+          { prazo: '361 a 720 dias',     aliq: '17,5%', check: diasTotais > 360 && diasTotais <= 720 },
+          { prazo: 'Acima de 720 dias',  aliq: '15,0%', check: diasTotais > 720 },
+        ];
+        const rows = faixas.map(f => `
+          <span style="display:flex;justify-content:space-between;padding:3px 0;${f.check ? 'color:#f0f0f8;font-weight:700;' : ''}">
+            <span>${f.check ? '→ ' : ''}${f.prazo}</span><span>${f.aliq}</span>
+          </span>`).join('');
+        irBox.innerHTML = `
+          <div class="ir-info">
+            <strong>📋 Tabela regressiva de IR — CDB</strong><br>
+            Quanto mais tempo investido, menor a alíquota. O IR é retido na fonte no resgate.<br><br>
+            <span style="display:flex;flex-direction:column;gap:1px;font-size:10.5px;">${rows}</span>
+            <span style="display:block;margin-top:8px;color:var(--text3);">Período: ${diasTotais} dias → alíquota aplicada: ${(aliqFinal*100).toFixed(1)}%</span>
+          </div>`;
+      }
+
+      // Legenda e gráfico
+      document.getElementById('legendRow').innerHTML = `
+        <div class="legend-item"><div class="legend-sq" style="background:#3266ad;"></div>Investido</div>
+        <div class="legend-item"><div class="legend-sq" style="background:#4fc98e;"></div>Rend. líquido</div>
+        ${!isento ? '<div class="legend-item"><div class="legend-sq" style="background:#c04848;"></div>IR pago</div>' : ''}`;
+
+      document.getElementById('resultado').classList.add('visivel');
+
+      if (grafChart) grafChart.destroy();
+      const datasets = [
+        { label: 'Investido', data: invArr, backgroundColor: '#3266ad', borderRadius: 3, stack: 'a' },
+        { label: 'Rend. líquido', data: rendLiqArr, backgroundColor: '#4fc98e', borderRadius: 3, stack: 'a' },
+      ];
+      if (!isento) datasets.push({ label: 'IR pago', data: irArr, backgroundColor: '#c04848', borderRadius: 3, stack: 'a' });
+
+      grafChart = new Chart(document.getElementById('grafico'), {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: R$ ${ctx.raw.toLocaleString('pt-BR')}` } }
+          },
+          scales: {
+            x: { stacked: true, ticks: { color: '#555570', font: { size: 10 }, maxRotation: 45, autoSkip: labels.length > 12 }, grid: { display: false }, border: { color: 'rgba(255,255,255,0.06)' } },
+            y: { stacked: true, ticks: { color: '#555570', font: { size: 10 }, callback: v => v >= 1000000 ? 'R$'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? 'R$'+(v/1000).toFixed(0)+'k' : 'R$'+v }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { display: false } }
+          }
+        }
+      });
+
+      document.getElementById('resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Enter na tela de setup
+    document.addEventListener('DOMContentLoaded', function() {
+      const inp = document.getElementById('apiKeyInput');
+      if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirmarChave(); });
+    });
+  </script>
+</body>
+</html>
